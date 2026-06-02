@@ -119,7 +119,7 @@ async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse("index.html", context={"request": request})
+    return templates.TemplateResponse(name="index.html", context={"request": request})
 
 
 @app.get("/health")
