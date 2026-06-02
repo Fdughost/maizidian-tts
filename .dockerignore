@@ -1,0 +1,12 @@
+.git
+.gitignore
+.env
+.env.example
+inputs/
+CascadeProjects/windsurf-project/outputs/
+CascadeProjects/windsurf-project/test0308.mp3
+**/__pycache__/
+**/*.pyc
+**/.DS_Store
+*.md
+plans/

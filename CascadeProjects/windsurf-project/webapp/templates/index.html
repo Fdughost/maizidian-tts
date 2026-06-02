@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>麦子店小二声音生成器</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <!-- 访问码 Gate：默认显示，验证通过后隐藏 -->
+  <div id="gate" class="gate">
+    <div class="gate-card">
+      <h1>麦子店小二声音生成器</h1>
+      <p class="muted">请输入邀请码以进入。</p>
+      <input id="gate-code" type="password" autocomplete="off" placeholder="邀请码" autofocus>
+      <button id="gate-submit" class="primary">进入</button>
+      <p id="gate-error" class="gate-error hidden"></p>
+    </div>
+  </div>
+
+  <!-- 主界面：默认隐藏，验证通过后显示 -->
+  <main id="app" class="container hidden">
+    <header class="app-header">
+      <h1>麦子店小二声音生成器</h1>
+      <button id="logout-btn" class="link">退出</button>
+    </header>
+    <p class="muted">上传 <code>.docx</code> / <code>.txt</code> 或粘贴文本，使用预设音色合成 MP3。</p>
+
+    <section class="card">
+      <div class="tabs">
+        <button data-tab="file" class="tab active">上传文件</button>
+        <button data-tab="text" class="tab">粘贴文本</button>
+      </div>
+
+      <div data-pane="file" class="pane active">
+        <input id="file-input" type="file" accept=".docx,.txt">
+        <p class="muted">支持 .docx / .txt（UTF-8 编码）。单次上传 ≤ 5 MB。</p>
+      </div>
+
+      <div data-pane="text" class="pane">
+        <textarea id="text-input" rows="10" placeholder="在此粘贴文本。段落之间用空行分隔。"></textarea>
+        <p class="muted"><span id="char-count">0</span> 字</p>
+      </div>
+
+      <button id="submit-btn" class="primary">开始合成</button>
+    </section>
+
+    <section id="progress-card" class="card hidden">
+      <h2>合成进度</h2>
+      <div class="progress-bar"><div id="progress-fill"></div></div>
+      <p id="progress-text" class="muted">等待开始...</p>
+    </section>
+
+    <section id="result-card" class="card hidden">
+      <h2 id="result-title">完成</h2>
+      <p id="result-detail" class="muted"></p>
+      <button id="download-btn" class="primary hidden">下载 MP3</button>
+    </section>
+
+    <section id="error-card" class="card error hidden">
+      <h2>出错了</h2>
+      <p id="error-detail"></p>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+
+      // ---------------- Gate ----------------
+      const gate = $("gate");
+      const gateCode = $("gate-code");
+      const gateSubmit = $("gate-submit");
+      const gateError = $("gate-error");
+      const app = $("app");
+      const logoutBtn = $("logout-btn");
+
+      function showApp() {
+        gate.classList.add("hidden");
+        app.classList.remove("hidden");
+      }
+      function showGate(msg) {
+        app.classList.add("hidden");
+        gate.classList.remove("hidden");
+        if (msg) {
+          gateError.textContent = msg;
+          gateError.classList.remove("hidden");
+        } else {
+          gateError.classList.add("hidden");
+        }
+        setTimeout(() => gateCode.focus(), 50);
+      }
+
+      async function verifyCode(code) {
+        const resp = await fetch("/api/verify", {
+          method: "POST",
+          headers: { "X-Access-Code": code },
+        });
+        if (resp.ok) return true;
+        if (resp.status === 401) return false;
+        const data = await resp.json().catch(() => ({}));
+        throw new Error(data.detail || `HTTP ${resp.status}`);
+      }
+
+      async function tryEnter(code) {
+        gateSubmit.disabled = true;
+        gateError.classList.add("hidden");
+        try {
+          const ok = await verifyCode(code);
+          if (ok) {
+            sessionStorage.setItem("access_code", code);
+            showApp();
+          } else {
+            sessionStorage.removeItem("access_code");
+            showGate("邀请码错误，请重试。");
+          }
+        } catch (e) {
+          showGate(e.message);
+        } finally {
+          gateSubmit.disabled = false;
+        }
+      }
+
+      gateSubmit.addEventListener("click", () => {
+        const code = (gateCode.value || "").trim();
+        if (!code) { showGate("请输入邀请码。"); return; }
+        tryEnter(code);
+      });
+      gateCode.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") gateSubmit.click();
+      });
+
+      logoutBtn.addEventListener("click", () => {
+        sessionStorage.removeItem("access_code");
+        sessionStorage.removeItem("last_job");
+        gateCode.value = "";
+        showGate(null);
+      });
+
+      // 启动：若 sessionStorage 已有码，静默验证一次
+      const saved = sessionStorage.getItem("access_code");
+      if (saved) {
+        verifyCode(saved).then((ok) => {
+          if (ok) showApp();
+          else { sessionStorage.removeItem("access_code"); showGate(null); }
+        }).catch(() => showGate(null));
+      } else {
+        showGate(null);
+      }
+
+      // ---------------- 主界面逻辑 ----------------
+      const fileInput = $("file-input");
+      const textInput = $("text-input");
+      const charCount = $("char-count");
+      const submitBtn = $("submit-btn");
+      const progressCard = $("progress-card");
+      const progressFill = $("progress-fill");
+      const progressText = $("progress-text");
+      const resultCard = $("result-card");
+      const resultTitle = $("result-title");
+      const resultDetail = $("result-detail");
+      const downloadBtn = $("download-btn");
+      const errorCard = $("error-card");
+      const errorDetail = $("error-detail");
+
+      let activeTab = "file";
+      document.querySelectorAll(".tab").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          activeTab = btn.dataset.tab;
+          document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b === btn));
+          document.querySelectorAll(".pane").forEach((p) => {
+            p.classList.toggle("active", p.dataset.pane === activeTab);
+          });
+        });
+      });
+
+      textInput.addEventListener("input", () => {
+        charCount.textContent = textInput.value.length.toString();
+      });
+
+      function showProgress(progress, total, statusMsg) {
+        progressCard.classList.remove("hidden");
+        const pct = total > 0 ? Math.round((progress / total) * 100) : 0;
+        progressFill.style.width = pct + "%";
+        progressText.textContent = statusMsg || `${progress} / ${total}`;
+      }
+
+      function showError(msg) {
+        errorCard.classList.remove("hidden");
+        errorDetail.textContent = msg;
+      }
+
+      function resetUI() {
+        progressCard.classList.add("hidden");
+        resultCard.classList.add("hidden");
+        errorCard.classList.add("hidden");
+        downloadBtn.classList.add("hidden");
+        resultCard.classList.remove("warning");
+      }
+
+      function getCode() {
+        return sessionStorage.getItem("access_code") || "";
+      }
+
+      async function submit() {
+        resetUI();
+        const code = getCode();
+        if (!code) { showGate("会话已过期，请重新输入邀请码。"); return; }
+
+        const fd = new FormData();
+        fd.append("source_type", activeTab);
+        if (activeTab === "file") {
+          if (!fileInput.files[0]) { showError("请选择文件"); return; }
+          fd.append("file", fileInput.files[0]);
+        } else {
+          const t = textInput.value;
+          if (!t.trim()) { showError("请粘贴文本"); return; }
+          fd.append("text", t);
+        }
+
+        submitBtn.disabled = true;
+        let job_id, job_token;
+        try {
+          const resp = await fetch("/api/jobs", {
+            method: "POST",
+            headers: { "X-Access-Code": code },
+            body: fd,
+          });
+          if (resp.status === 401) {
+            sessionStorage.removeItem("access_code");
+            showGate("邀请码已失效，请重新输入。");
+            submitBtn.disabled = false;
+            return;
+          }
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.detail || `HTTP ${resp.status}`);
+          }
+          const data = await resp.json();
+          job_id = data.job_id;
+          job_token = data.job_token;
+          sessionStorage.setItem("last_job", JSON.stringify({ job_id, job_token }));
+        } catch (e) {
+          showError(e.message);
+          submitBtn.disabled = false;
+          return;
+        }
+
+        showProgress(0, 1, "提交成功，等待合成...");
+
+        const poll = async () => {
+          try {
+            const resp = await fetch(`/api/jobs/${job_id}`, {
+              headers: { "X-Job-Token": job_token },
+            });
+            if (!resp.ok) {
+              const data = await resp.json().catch(() => ({}));
+              throw new Error(data.detail || `HTTP ${resp.status}`);
+            }
+            const j = await resp.json();
+            showProgress(j.progress, j.total, `${j.status} · ${j.progress}/${j.total}`);
+
+            if (j.status === "done" || j.status === "done_with_warnings") {
+              resultCard.classList.remove("hidden");
+              if (j.status === "done") {
+                resultTitle.textContent = "✓ 合成完成";
+                resultDetail.textContent = `${j.total} 个片段全部成功。`;
+              } else {
+                resultCard.classList.add("warning");
+                resultTitle.textContent = "⚠ 部分片段失败";
+                resultDetail.textContent = `${j.failed_segments.length} / ${j.total} 个片段失败，其余已合并。`;
+              }
+              downloadBtn.classList.remove("hidden");
+              downloadBtn.onclick = () => downloadResult(job_id, job_token);
+              submitBtn.disabled = false;
+              return;
+            }
+            if (j.status === "error" || j.status === "timeout") {
+              showError(`${j.status}: ${j.error || "unknown"}`);
+              submitBtn.disabled = false;
+              return;
+            }
+            setTimeout(poll, 2000);
+          } catch (e) {
+            showError(e.message);
+            submitBtn.disabled = false;
+          }
+        };
+        setTimeout(poll, 1500);
+      }
+
+      async function downloadResult(job_id, job_token) {
+        downloadBtn.disabled = true;
+        try {
+          const resp = await fetch(`/api/jobs/${job_id}/download`, {
+            headers: { "X-Job-Token": job_token },
+          });
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data.detail || `HTTP ${resp.status}`);
+          }
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `tts_${job_id.slice(0, 8)}.mp3`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch (e) {
+          showError(`下载失败：${e.message}`);
+        } finally {
+          downloadBtn.disabled = false;
+        }
+      }
+
+      submitBtn.addEventListener("click", submit);
+    })();
+  </script>
+</body>
+</html>

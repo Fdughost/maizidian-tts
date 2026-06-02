@@ -1,0 +1,152 @@
+:root {
+  --bg: #f7f7f8;
+  --card: #ffffff;
+  --border: #e5e5e7;
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0a84ff;
+  --accent-hover: #006edc;
+  --warn-bg: #fff7e6;
+  --warn-border: #ffd591;
+  --error-bg: #fff1f0;
+  --error-border: #ffa39e;
+  --error-text: #a8071a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+h1 { font-size: 1.6rem; margin: 0 0 .25rem; }
+h2 { font-size: 1.05rem; margin: 0 0 .75rem; }
+.muted { color: var(--muted); font-size: .9rem; }
+code { background: #ececec; padding: 0 .25em; border-radius: 3px; font-size: .9em; }
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.1rem;
+  margin: 1rem 0;
+}
+.card.error { background: var(--error-bg); border-color: var(--error-border); color: var(--error-text); }
+.card.warning { background: var(--warn-bg); border-color: var(--warn-border); }
+
+label { display: block; margin-bottom: .35rem; font-weight: 500; }
+
+input[type="password"], input[type="file"], textarea {
+  width: 100%;
+  padding: .55rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  font-family: inherit;
+  background: #fff;
+}
+textarea { resize: vertical; }
+
+.tabs { display: flex; gap: .5rem; margin-bottom: .75rem; }
+.tab {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: .4rem .8rem;
+  font-size: .9rem;
+  cursor: pointer;
+}
+.tab.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+.pane { display: none; }
+.pane.active { display: block; }
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border: 0;
+  border-radius: 6px;
+  padding: .6rem 1.2rem;
+  font-size: .95rem;
+  cursor: pointer;
+  margin-top: .8rem;
+}
+button.primary:hover { background: var(--accent-hover); }
+button.primary:disabled { opacity: .5; cursor: not-allowed; }
+
+.hidden { display: none !important; }
+
+/* Gate 全屏邀请码门 */
+.gate {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  padding: 1.25rem;
+  z-index: 10;
+}
+.gate-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.6rem 1.4rem;
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, .05);
+}
+.gate-card h1 { margin: 0 0 .35rem; font-size: 1.35rem; }
+.gate-card .muted { margin: .25rem 0 1rem; }
+.gate-card input { margin-bottom: .8rem; text-align: center; letter-spacing: .05em; }
+.gate-card button.primary { width: 100%; margin-top: 0; }
+.gate-error {
+  margin-top: .8rem;
+  color: var(--error-text);
+  font-size: .9rem;
+}
+
+/* App header（已登录态的小顶栏） */
+.app-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 .25rem;
+}
+.app-header h1 { margin: 0; }
+
+button.link {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  font-size: .85rem;
+  cursor: pointer;
+  padding: 0;
+}
+button.link:hover { color: var(--text); text-decoration: underline; }
+
+.progress-bar {
+  height: 8px;
+  background: #ececec;
+  border-radius: 4px;
+  overflow: hidden;
+  margin: .4rem 0 .6rem;
+}
+#progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  transition: width .3s ease;
+}
